@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg-base: #f5f5fa;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --bg-elevated: rgba(240, 240, 250, 0.9);
+    --bg-input: rgba(255, 255, 255, 0.6);
+    --bg-hover: rgba(200, 200, 220, 0.5);
+    --bg-sidebar: rgba(255, 255, 255, 0.92);
+    --bg-header: rgba(255, 255, 255, 0.85);
+    --text-primary: #1a1a3e;
+    --text-secondary: #6b6b8a;
+    --border-color: rgba(0, 0, 0, 0.08);
+    --border-hover: rgba(0, 0, 0, 0.15);
+    --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.06);
+    --shadow-glow-cyan: 0 0 20px rgba(0, 180, 220, 0.15), 0 0 60px rgba(0, 180, 220, 0.05);
+    --shadow-glow-purple: 0 0 20px rgba(140, 30, 200, 0.15), 0 0 60px rgba(140, 30, 200, 0.05);
+    --accent-cyan: #0099bb;
+    --accent-purple: #8b1dd6;
+    --accent-success: #00aa55;
+    --accent-warning: #cc8800;
+    --accent-error: #cc3344;
+  }
+
+  .dark {
+    --bg-base: #0a0a1a;
+    --bg-card: rgba(18, 18, 42, 0.8);
+    --bg-elevated: rgba(26, 26, 62, 0.9);
+    --bg-input: rgba(18, 18, 42, 0.6);
+    --bg-hover: rgba(50, 50, 100, 0.5);
+    --bg-sidebar: rgba(12, 12, 30, 0.95);
+    --bg-header: rgba(12, 12, 30, 0.8);
+    --text-primary: #e0e0ff;
+    --text-secondary: #8888aa;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --border-hover: rgba(255, 255, 255, 0.15);
+    --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --shadow-glow-cyan: 0 0 20px rgba(0, 240, 255, 0.3), 0 0 60px rgba(0, 240, 255, 0.1);
+    --shadow-glow-purple: 0 0 20px rgba(176, 38, 255, 0.3), 0 0 60px rgba(176, 38, 255, 0.1);
+    --accent-cyan: #00f0ff;
+    --accent-purple: #b026ff;
+    --accent-success: #00ff88;
+    --accent-warning: #ffaa00;
+    --accent-error: #ff4466;
+  }
+
+  body {
+    @apply font-sans antialiased;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-color) transparent;
+  }
+
+  *::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  *::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--border-hover);
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply rounded-2xl backdrop-blur-xl;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-color);
+    box-shadow: var(--shadow-glass);
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:scale-[1.02] cursor-pointer;
+  }
+
+  .glass-card-hover:hover {
+    border-color: var(--border-hover);
+    box-shadow: var(--shadow-glow-cyan);
+  }
+
+  .glow-cyan {
+    box-shadow: var(--shadow-glow-cyan);
+  }
+
+  .glow-purple {
+    box-shadow: var(--shadow-glow-purple);
+  }
+
+  .text-glow-cyan {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent-cyan) 50%, transparent), 0 0 30px color-mix(in srgb, var(--accent-cyan) 20%, transparent);
+  }
+
+  .text-glow-purple {
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent-purple) 50%, transparent), 0 0 30px color-mix(in srgb, var(--accent-purple) 20%, transparent);
+  }
+
+  .theme-bg-base { background-color: var(--bg-base); }
+  .theme-bg-card { background-color: var(--bg-card); }
+  .theme-bg-elevated { background-color: var(--bg-elevated); }
+  .theme-bg-input { background-color: var(--bg-input); }
+  .theme-bg-sidebar { background-color: var(--bg-sidebar); }
+  .theme-bg-header { background-color: var(--bg-header); }
+  .theme-text-primary { color: var(--text-primary); }
+  .theme-text-secondary { color: var(--text-secondary); }
+  .theme-border { border-color: var(--border-color); }
+  .theme-border-hover { border-color: var(--border-hover); }
+  .theme-accent-cyan { color: var(--accent-cyan); }
+  .theme-accent-purple { color: var(--accent-purple); }
+  .theme-accent-success { color: var(--accent-success); }
+  .theme-accent-warning { color: var(--accent-warning); }
+  .theme-accent-error { color: var(--accent-error); }
+}
