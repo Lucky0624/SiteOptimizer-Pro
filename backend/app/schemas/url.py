@@ -55,6 +55,7 @@ class URLResponse(BaseModel):
     last_modified_at: datetime | None
     created_at: datetime
     updated_at: datetime | None
+    latest_snapshot: SnapshotResponse | None = None
 
     model_config = {"from_attributes": True}
 

@@ -19,5 +19,12 @@ async def get_db() -> AsyncSession:
 
 
 async def create_tables() -> None:
+    import app.models  # noqa: F401 - ensure all SQLAlchemy models are registered
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        if engine.dialect.name == "sqlite":
+            result = await conn.exec_driver_sql("PRAGMA table_info(website)")
+            columns = {row[1] for row in result.fetchall()}
+            for column in ("gsc_verified_at", "cms_verified_at"):
+                if column not in columns:
+                    await conn.exec_driver_sql(f"ALTER TABLE website ADD COLUMN {column} DATETIME")

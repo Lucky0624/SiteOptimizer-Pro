@@ -25,8 +25,12 @@ class Website(Base):
     
     # GA4 Configuration
     ga4_property_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    # Connection verification state
+    gsc_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cms_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     
-    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, onupdate=lambda: datetime.now(timezone.utc))
 

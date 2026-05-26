@@ -1,8 +1,9 @@
-import { useState } from 'react'
 import { Globe, CheckCircle, Zap, TrendingDown, MousePointer, Eye, Target } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
 import { useI18n } from '../i18n/I18nContext'
+import { useWebsite } from '../context/WebsiteContext'
+import { useToast } from '../context/ToastContext'
 import StatCard from '../components/ui/StatCard'
 import GlassCard from '../components/ui/GlassCard'
 import QuotaBar from '../components/ui/QuotaBar'
@@ -13,11 +14,12 @@ import WebsiteSelector from '../components/common/WebsiteSelector'
 
 export default function Dashboard() {
   const { t } = useI18n()
-  const [selectedWebsite, setSelectedWebsite] = useState<number | null>(null)
+  const { selectedWebsiteId, setSelectedWebsiteId } = useWebsite()
+  const { showToast } = useToast()
 
-  const { data: stats } = useApi(() => api.dashboard.getStats(selectedWebsite ?? undefined), [selectedWebsite])
-  const { data: trends } = useApi(() => api.dashboard.getTrends(30, selectedWebsite ?? undefined), [selectedWebsite])
-  const { data: opportunities } = useApi(() => api.dashboard.getTopOpportunities(5, selectedWebsite ?? undefined), [selectedWebsite])
+  const { data: stats } = useApi(() => api.dashboard.getStats(selectedWebsiteId ?? undefined), [selectedWebsiteId])
+  const { data: trends } = useApi(() => api.dashboard.getTrends(30, selectedWebsiteId ?? undefined), [selectedWebsiteId])
+  const { data: opportunities } = useApi(() => api.dashboard.getTopOpportunities(5, selectedWebsiteId ?? undefined), [selectedWebsiteId])
   const { data: quotaData } = useApi(() => api.quota.getStatus())
 
   const quotaMap = quotaData?.quotas.reduce((acc, q) => {
@@ -28,11 +30,11 @@ export default function Dashboard() {
   const handleRunCycle = async () => {
     if (!confirm(t('dashboard.runCycleConfirm'))) return
     try {
-      await api.dashboard.runCycle()
-      alert(t('dashboard.runCycleSuccess'))
+      await api.dashboard.runCycle(selectedWebsiteId ?? undefined)
+      showToast(t('dashboard.runCycleSuccess'), 'success')
       window.location.reload()
     } catch (err: any) {
-      alert(`${t('dashboard.runCycleFail')}: ${err.message}`)
+      showToast(`${t('dashboard.runCycleFail')}: ${err.message}`, 'error')
     }
   }
 
@@ -41,7 +43,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <h1 className="text-2xl font-bold theme-text-primary">{t('dashboard.title')}</h1>
-          <WebsiteSelector value={selectedWebsite} onChange={setSelectedWebsite} />
+          <WebsiteSelector value={selectedWebsiteId} onChange={setSelectedWebsiteId} />
         </div>
         <button
           onClick={handleRunCycle}

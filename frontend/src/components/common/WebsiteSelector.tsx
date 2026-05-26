@@ -17,8 +17,8 @@ export default function WebsiteSelector({ value, onChange, className }: WebsiteS
   useEffect(() => {
     const fetchWebsites = async () => {
       try {
-        const res = await api.websites.list({ page: 1, page_size: 100 })
-        setWebsites(res.items)
+        const items = await api.websites.listAll()
+        setWebsites(items)
       } catch {
         setWebsites([])
       }

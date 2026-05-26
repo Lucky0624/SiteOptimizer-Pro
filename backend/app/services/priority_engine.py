@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.url import URLRecord
 from app.models.snapshot import Tag, PerformanceSnapshot
@@ -42,14 +43,22 @@ class PriorityEngine:
                 if drop_pct > 20:
                     score += 30.0
 
+        # 修复：基于已抓取天数进行比例衰减，最多衰减 20 分，避免高分 URL 被大量误扣
         if url_record.last_crawled_at:
-            days_since = (datetime.now(timezone.utc) - url_record.last_crawled_at).days
-            score -= min(days_since, score)
+            last_crawled = url_record.last_crawled_at
+            # 统一使用 UTC naive 比较，防止时区混淆
+            now = datetime.utcnow()
+            if last_crawled.tzinfo is not None:
+                last_crawled = last_crawled.replace(tzinfo=None)
+            days_since = max(0, (now - last_crawled).days)
+            # 每过一天最多扣 1 分，上限 20 分（不能扣为负）
+            decay_penalty = min(days_since * 1.0, 20.0)
+            score = max(0.0, score - decay_penalty)
 
         return max(0.0, score)
 
     async def recalculate_all_priorities(self, db: AsyncSession, website_id: int | None = None) -> int:
-        stmt = select(URLRecord).where(URLRecord.status == "active")
+        stmt = select(URLRecord).where(URLRecord.status == "active").options(selectinload(URLRecord.tags))
         if website_id:
             stmt = stmt.where(URLRecord.website_id == website_id)
         result = await db.execute(stmt)
@@ -82,6 +91,7 @@ class PriorityEngine:
         stmt = (
             select(URLRecord)
             .where(URLRecord.status == "active")
+            .options(selectinload(URLRecord.tags), selectinload(URLRecord.website))
             .order_by(URLRecord.priority_score.desc())
             .limit(limit)
         )

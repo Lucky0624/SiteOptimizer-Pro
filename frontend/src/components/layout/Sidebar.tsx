@@ -1,25 +1,27 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Link, ListTodo, Gauge, Settings, Wifi, WifiOff, X, Globe } from 'lucide-react'
+import { LayoutDashboard, Link, ListTodo, Gauge, Settings, X, Globe, Search, Zap, Wifi, WifiOff } from 'lucide-react'
 import clsx from 'clsx'
 import { useI18n } from '../../i18n/I18nContext'
 
 interface SidebarProps {
   open: boolean
+  connected: boolean
   onClose: () => void
 }
 
 const navKeys = [
   { to: '/dashboard', icon: LayoutDashboard, labelKey: 'sidebar.dashboard' },
   { to: '/urls', icon: Link, labelKey: 'sidebar.urls' },
+  { to: '/keywords', icon: Search, labelKey: 'sidebar.keywords' },
+  { to: '/vitals', icon: Zap, labelKey: 'sidebar.vitals' },
   { to: '/websites', icon: Globe, labelKey: 'sidebar.websites' },
   { to: '/tasks', icon: ListTodo, labelKey: 'sidebar.tasks' },
   { to: '/quota', icon: Gauge, labelKey: 'sidebar.quota' },
   { to: '/settings', icon: Settings, labelKey: 'sidebar.settings' },
 ]
 
-export default function Sidebar({ open, onClose }: SidebarProps) {
+export default function Sidebar({ open, connected, onClose }: SidebarProps) {
   const { t } = useI18n()
-  const isConnected = !!localStorage.getItem('admin_key')
 
   return (
     <aside
@@ -72,7 +74,7 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
       <div className="px-4 py-4" style={{ borderTop: '1px solid var(--border-color)' }}>
         <div className="flex items-center gap-2 text-xs">
-          {isConnected ? (
+          {connected ? (
             <>
               <Wifi size={14} style={{ color: 'var(--accent-success)' }} />
               <span style={{ color: 'var(--accent-success)' }}>{t('sidebar.connected')}</span>

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.api.auth import verify_admin_key
 from app.models.task import TaskQueue
+from app.models.url import URLRecord
 from app.schemas.task import (
     TaskCreate,
     TaskResponse,
@@ -25,6 +26,7 @@ async def list_tasks(
     status: str | None = Query(None),
     task_type: str | None = Query(None),
     scheduled_date: date | None = Query(None),
+    website_id: int | None = Query(None),
     api_key: str = Depends(verify_admin_key),
     db: AsyncSession = Depends(get_db),
 ):
@@ -36,6 +38,8 @@ async def list_tasks(
         stmt = stmt.where(TaskQueue.task_type == task_type)
     if scheduled_date:
         stmt = stmt.where(TaskQueue.scheduled_date == scheduled_date)
+    if website_id:
+        stmt = stmt.join(URLRecord, URLRecord.id == TaskQueue.url_id).where(URLRecord.website_id == website_id)
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
     total = (await db.execute(count_stmt)).scalar() or 0
@@ -57,10 +61,11 @@ async def list_tasks(
 
 @router.post("/allocate")
 async def allocate_tasks(
+    website_id: int | None = Query(None),
     api_key: str = Depends(verify_admin_key),
     db: AsyncSession = Depends(get_db),
 ):
-    created = await task_scheduler.schedule_daily_tasks(db)
+    created = await task_scheduler.schedule_daily_tasks(db, website_id=website_id)
     return {"tasks_created": created}
 
 
@@ -91,15 +96,17 @@ async def retry_task(
 
 @router.post("/process")
 async def process_tasks(
+    website_id: int | None = Query(None),
     api_key: str = Depends(verify_admin_key),
     db: AsyncSession = Depends(get_db),
 ):
-    processed = await task_scheduler.process_pending_tasks(db)
+    processed = await task_scheduler.process_pending_tasks(db, website_id=website_id)
     return {"tasks_processed": processed}
 
 
 @router.get("/stats", response_model=TaskStatsResponse)
 async def task_stats(
+    website_id: int | None = Query(None),
     api_key: str = Depends(verify_admin_key),
     db: AsyncSession = Depends(get_db),
 ):
@@ -108,9 +115,12 @@ async def task_stats(
     total = 0
 
     for s in statuses:
-        stmt = select(func.count()).select_from(
-            select(TaskQueue).where(TaskQueue.status == s).subquery()
-        )
+        count_query = select(TaskQueue).where(TaskQueue.status == s)
+        if website_id:
+            count_query = count_query.join(URLRecord, URLRecord.id == TaskQueue.url_id).where(
+                URLRecord.website_id == website_id
+            )
+        stmt = select(func.count()).select_from(count_query.subquery())
         count = (await db.execute(stmt)).scalar() or 0
         counts[s] = count
         total += count

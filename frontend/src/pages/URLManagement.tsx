@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect, Fragment } from 'react'
-import { Search, Plus, RotateCcw, Archive, ChevronDown, ChevronUp, X } from 'lucide-react'
+import { Search, Plus, RotateCcw, Archive, ChevronDown, ChevronUp, X, FileDown } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
-import type { URLItem, URLDetailItem, WebsiteResponse } from '../services/api'
+import type { ContentOptimizationItem, URLItem, URLDetailItem, WebsiteResponse } from '../services/api'
 import { useI18n } from '../i18n/I18nContext'
+import { useWebsite } from '../context/WebsiteContext'
+import { useToast } from '../context/ToastContext'
 import GlassCard from '../components/ui/GlassCard'
 import GlowButton from '../components/ui/GlowButton'
 import StatusBadge from '../components/ui/StatusBadge'
@@ -39,6 +41,9 @@ function getScoreColor(score: number): React.CSSProperties {
 
 export default function URLManagement() {
   const { t } = useI18n()
+  const { showToast } = useToast()
+  // 修复：使用全局 WebsiteContext，各页面站点选择联动
+  const { selectedWebsiteId, setSelectedWebsiteId } = useWebsite()
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const [tagFilter, setTagFilter] = useState('')
@@ -46,11 +51,22 @@ export default function URLManagement() {
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [detailData, setDetailData] = useState<URLDetailItem | null>(null)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showSitemapModal, setShowSitemapModal] = useState(false)
+  const [sitemapUrl, setSitemapUrl] = useState('')
+  const [importing, setImporting] = useState(false)
   const [newUrl, setNewUrl] = useState('')
   const [newTitle, setNewTitle] = useState('')
-  const [selectedWebsite, setSelectedWebsite] = useState<number | null>(null)
   const [addUrlWebsiteId, setAddUrlWebsiteId] = useState<number | null>(null)
   const [websites, setWebsites] = useState<WebsiteResponse[]>([])
+
+  // 批量操作状态
+  const [selectedIds, setSelectedIds] = useState<number[]>([])
+  const [batchActioning, setBatchActioning] = useState(false)
+  const [fetchingKeywords, setFetchingKeywords] = useState(false)
+  const [optimizingUrlId, setOptimizingUrlId] = useState<number | null>(null)
+  const [optimizationModal, setOptimizationModal] = useState<ContentOptimizationItem | null>(null)
+  const [suggestedTitle, setSuggestedTitle] = useState('')
+  const [suggestedDescription, setSuggestedDescription] = useState('')
 
   const { data, loading, refetch } = useApi(
     () => api.urls.list({
@@ -59,14 +75,24 @@ export default function URLManagement() {
       tag: tagFilter || undefined,
       search: search || undefined,
       sort_by: sort,
-      website_id: selectedWebsite ?? undefined
+      website_id: selectedWebsiteId ?? undefined
     }),
-    [page, tagFilter, search, sort, selectedWebsite]
+    [page, tagFilter, search, sort, selectedWebsiteId]
   )
 
+  // 当页码或数据改变时，清空已选（或者保留，这取决于具体需求，这里简单处理不跨页选择）
   useEffect(() => {
-    api.websites.list().then(res => setWebsites(res.items))
+    setSelectedIds([])
+  }, [data])
+
+  useEffect(() => {
+    api.websites.listAll().then(setWebsites)
   }, [])
+
+  useEffect(() => {
+    setSuggestedTitle(optimizationModal?.suggested_title || '')
+    setSuggestedDescription(optimizationModal?.suggested_meta_description || '')
+  }, [optimizationModal])
 
   const handleSearch = useCallback((value: string) => {
     setSearch(value)
@@ -76,45 +102,172 @@ export default function URLManagement() {
   const handleAddUrl = async () => {
     if (!newUrl) return
     try {
-      await api.urls.create({
-        url: newUrl,
-        title: newTitle || undefined,
-        website_id: addUrlWebsiteId ?? undefined
-      })
-      setShowAddModal(false)
-      setNewUrl('')
-      setNewTitle('')
-      setAddUrlWebsiteId(null)
+      await api.urls.create({ url: newUrl, title: newTitle || undefined, website_id: addUrlWebsiteId ?? undefined })
+      showToast(t('urls.addSuccess') || '添加成功', 'success')
+      setShowAddModal(false); setNewUrl(''); setNewTitle(''); setAddUrlWebsiteId(null)
       refetch()
-    } catch {}
+    } catch (err: any) {
+      showToast(err.message || t('urls.addError') || '添加失败', 'error')
+    }
+  }
+
+  const handleImportSitemap = async () => {
+    if (!sitemapUrl.trim()) return
+    setImporting(true)
+    try {
+      const res = await api.urls.importSitemap({ sitemap_url: sitemapUrl, website_id: selectedWebsiteId })
+      const msg = t('urls.importSuccess')
+        .replace('{count}', String(res.imported))
+        .replace('{skipped}', String(res.skipped))
+      showToast(msg, 'success')
+      setShowSitemapModal(false); setSitemapUrl('')
+      refetch()
+    } catch (err: any) {
+      showToast(err.message || t('urls.importError'), 'error')
+    } finally {
+      setImporting(false)
+    }
   }
 
   const handleRecrawl = async (id: number) => {
     try {
       await api.urls.markRecrawl(id)
       refetch()
-    } catch {}
+      showToast(t('urls.recrawlSuccess') || '已标记重抓取', 'success')
+    } catch (err: any) {
+      showToast(err.message || '操作失败', 'error')
+    }
   }
 
   const handleArchive = async (id: number) => {
     try {
       await api.urls.update(id, { status: 'archived' })
       refetch()
-    } catch {}
+      showToast(t('urls.archiveSuccess') || '已归档', 'success')
+    } catch (err: any) {
+      showToast(err.message || '操作失败', 'error')
+    }
   }
 
   const toggleExpand = async (id: number) => {
-    if (expandedId === id) {
-      setExpandedId(null)
-      setDetailData(null)
-      return
-    }
+    if (expandedId === id) { setExpandedId(null); setDetailData(null); return }
     setExpandedId(id)
     try {
       const detail = await api.urls.get(id)
       setDetailData(detail)
-    } catch {
-      setDetailData(null)
+    } catch { setDetailData(null) }
+  }
+
+  // 批量操作处理
+  const handleToggleSelectAll = () => {
+    if (!data?.items) return
+    if (selectedIds.length === data.items.length) {
+      setSelectedIds([])
+    } else {
+      setSelectedIds(data.items.map((u: URLItem) => u.id))
+    }
+  }
+
+  const handleToggleSelect = (id: number, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const handleBatchAction = async (action: string) => {
+    if (!selectedIds.length) return
+    if (action === 'delete' && !window.confirm(t('urls.deleteConfirm') || '确认删除所选 URL 吗？')) return
+
+    setBatchActioning(true)
+    try {
+      // @ts-ignore (因为我们在 api.ts 里强行注了 batchAction)
+      const res = await api.urls.batchAction(action, selectedIds)
+      showToast(t('urls.batchSuccess')?.replace('{count}', String(res.affected)) || `成功操作 ${res.affected} 个网址`, 'success')
+      setSelectedIds([])
+      refetch()
+    } catch (err: any) {
+      showToast(err.message || t('urls.batchError') || '批量操作失败', 'error')
+    } finally {
+      setBatchActioning(false)
+    }
+  }
+
+  const handleExportCsv = async () => {
+    try {
+      showToast(t('urls.exporting') || '正在导出...', 'info')
+      // @ts-ignore
+      await api.urls.exportCsv({ website_id: selectedWebsiteId, tag: tagFilter, status: '' })
+    } catch (err: any) {
+      showToast(err.message || t('urls.exportError') || '导出失败', 'error')
+    }
+  }
+
+  const handleFetchKeywords = async (urlId: number) => {
+    setFetchingKeywords(true)
+    try {
+      const res = await api.keywords.fetch(urlId, 30) // 默认抓30天
+      showToast(`成功抓取，导入 ${res.imported} 条关键词数据`, 'success')
+      // 重新拉取详情
+      const detail = await api.urls.get(urlId)
+      setDetailData(detail)
+    } catch (err: any) {
+      showToast(err.message || '抓取关键词失败', 'error')
+    } finally {
+      setFetchingKeywords(false)
+    }
+  }
+
+  const handleCreateOptimization = async (url: URLItem) => {
+    const websiteId = url.website_id ?? selectedWebsiteId
+    if (!websiteId) {
+      showToast('请先把该 URL 关联到 Shopify 或 WordPress 站点', 'warning')
+      return
+    }
+    setOptimizingUrlId(url.id)
+    try {
+      const suggestion = await api.cms.createOptimization(websiteId, url.id)
+      setOptimizationModal(suggestion)
+      showToast('已生成内容优化建议，等待你审批', 'success')
+    } catch (err: any) {
+      showToast(err.message || '生成内容优化建议失败', 'error')
+    } finally {
+      setOptimizingUrlId(null)
+    }
+  }
+
+  const handleSaveAndApprove = async (item: ContentOptimizationItem) => {
+    try {
+      const saved = await api.cms.updateOptimization(item.website_id, item.id, {
+        suggested_title: suggestedTitle,
+        suggested_meta_description: suggestedDescription,
+      })
+      const approved = await api.cms.approveOptimization(saved.website_id, saved.id)
+      setOptimizationModal(approved)
+      showToast('建议已批准，请确认后回写 CMS', 'success')
+    } catch (err: any) {
+      showToast(err.message || '保存/批准失败', 'error')
+    }
+  }
+
+  const handleApplyOptimization = async (item: ContentOptimizationItem) => {
+    try {
+      const applied = await api.cms.applyOptimization(item.website_id, item.id)
+      setOptimizationModal(applied)
+      refetch()
+      showToast(applied.status === 'applied' ? '已回写到 CMS' : '回写失败，请查看错误信息', applied.status === 'applied' ? 'success' : 'error')
+    } catch (err: any) {
+      showToast(err.message || '回写失败', 'error')
+    }
+  }
+
+  const handleRejectOptimization = async (item: ContentOptimizationItem) => {
+    try {
+      const rejected = await api.cms.rejectOptimization(item.website_id, item.id)
+      setOptimizationModal(rejected)
+      showToast('已驳回该建议', 'info')
+    } catch (err: any) {
+      showToast(err.message || '驳回失败', 'error')
     }
   }
 
@@ -159,11 +312,19 @@ export default function URLManagement() {
               <option key={opt.value} value={opt.value}>{t(opt.labelKey)}</option>
             ))}
           </select>
-          <WebsiteSelector value={selectedWebsite} onChange={setSelectedWebsite} />
+          <WebsiteSelector value={selectedWebsiteId} onChange={setSelectedWebsiteId} />
         </div>
-        <GlowButton onClick={() => setShowAddModal(true)}>
-          <Plus size={16} /> {t('urls.addUrl')}
-        </GlowButton>
+        <div className="flex gap-2">
+          <GlowButton variant="secondary" onClick={handleExportCsv}>
+            <FileDown size={16} /> {t('urls.exportCsv')}
+          </GlowButton>
+          <GlowButton variant="secondary" onClick={() => setShowSitemapModal(true)}>
+            <FileDown size={16} /> {t('urls.importSitemap')}
+          </GlowButton>
+          <GlowButton onClick={() => setShowAddModal(true)}>
+            <Plus size={16} /> {t('urls.addUrl')}
+          </GlowButton>
+        </div>
       </div>
 
       <GlassCard>
@@ -171,6 +332,14 @@ export default function URLManagement() {
           <table className="w-full">
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-color)' }} className="text-left text-xs theme-text-secondary">
+                <th className="px-4 py-3 font-medium w-10 text-center">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-600 bg-transparent text-indigo-500 focus:ring-indigo-500/50"
+                    checked={(data?.items?.length ?? 0) > 0 && selectedIds.length === data?.items?.length}
+                    onChange={handleToggleSelectAll}
+                  />
+                </th>
                 <th className="px-4 py-3 font-medium">{t('urls.url')}</th>
                 <th className="px-4 py-3 font-medium">{t('urls.priority')}</th>
                 <th className="px-4 py-3 font-medium">{t('urls.status')}</th>
@@ -181,21 +350,29 @@ export default function URLManagement() {
             <tbody>
               {loading && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm theme-text-secondary">{t('urls.loading')}</td>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm theme-text-secondary">{t('urls.loading')}</td>
                 </tr>
               )}
               {!loading && !data?.items.length && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-sm theme-text-secondary">{t('urls.noUrls')}</td>
+                  <td colSpan={6} className="px-4 py-12 text-center text-sm theme-text-secondary">{t('urls.noUrls')}</td>
                 </tr>
               )}
               {data?.items.map((url: URLItem) => (
                 <Fragment key={url.id}>
                   <tr
                     className="group cursor-pointer transition-colors hover:opacity-90"
-                    style={{ borderBottom: '1px solid var(--border-color)' }}
+                    style={{ borderBottom: '1px solid var(--border-color)', backgroundColor: selectedIds.includes(url.id) ? 'var(--bg-hover)' : 'transparent' }}
                     onClick={() => toggleExpand(url.id)}
                   >
+                    <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        className="rounded border-gray-600 bg-transparent text-indigo-500 focus:ring-indigo-500/50"
+                        checked={selectedIds.includes(url.id)}
+                        onChange={(e) => handleToggleSelect(url.id, e as any)}
+                      />
+                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         {expandedId === url.id ? <ChevronUp size={14} className="theme-text-secondary" /> : <ChevronDown size={14} className="theme-text-secondary" />}
@@ -235,14 +412,36 @@ export default function URLManagement() {
                   </tr>
                   {expandedId === url.id && detailData && (
                     <tr key={`${url.id}-detail`}>
-                      <td colSpan={5} className="px-8 py-4" style={{ backgroundColor: 'var(--bg-input)' }}>
-                        <div className="mb-4 flex flex-wrap gap-1">
-                          {detailData.tags.map((tag) => (
-                            <StatusBadge key={tag.id} status={tag.tag_name} type="tag" label={getTagLabel(tag.tag_name, t)} />
-                          ))}
-                          {!detailData.tags.length && (
-                            <span className="text-xs theme-text-secondary">{t('urls.noTags')}</span>
-                          )}
+                      <td colSpan={6} className="px-8 py-4" style={{ backgroundColor: 'var(--bg-input)' }}>
+                        <div className="mb-4 flex flex-wrap items-center justify-between gap-1">
+                          <div className="flex flex-wrap gap-1">
+                            {detailData.tags.map((tag) => (
+                              <StatusBadge key={tag.id} status={tag.tag_name} type="tag" label={getTagLabel(tag.tag_name, t)} />
+                            ))}
+                            {!detailData.tags.length && (
+                              <span className="text-xs theme-text-secondary">{t('urls.noTags')}</span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <GlowButton
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleFetchKeywords(url.id)}
+                              disabled={fetchingKeywords}
+                            >
+                              <Search size={14} className="mr-1" />
+                              {fetchingKeywords ? '抓取中...' : '抓取 GSC 关键词'}
+                            </GlowButton>
+                            <GlowButton
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleCreateOptimization(url)}
+                              disabled={optimizingUrlId === url.id}
+                            >
+                              <FileDown size={14} className="mr-1" />
+                              {optimizingUrlId === url.id ? '生成中...' : '生成内容建议'}
+                            </GlowButton>
+                          </div>
                         </div>
                         {detailData.snapshots.length > 0 && (
                           <div className="grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
@@ -429,6 +628,151 @@ export default function URLManagement() {
               </div>
             </div>
           </GlassCard>
+        </div>
+      )}
+      {showSitemapModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setShowSitemapModal(false)}>
+          <GlassCard className="w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-lg font-semibold theme-text-primary">{t('urls.importSitemap')}</h3>
+              <button onClick={() => setShowSitemapModal(false)} className="theme-text-secondary hover:theme-text-primary"><X size={20} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1 block text-xs theme-text-secondary">{t('urls.sitemapUrl')}</label>
+                <input
+                  type="url" value={sitemapUrl} onChange={e => setSitemapUrl(e.target.value)}
+                  placeholder={t('urls.sitemapUrlPlaceholder')}
+                  className="h-10 w-full rounded-xl px-4 text-sm outline-none" style={inputStyle}
+                />
+              </div>
+              <p className="text-[10px] theme-text-secondary">支持标准 sitemap.xml 和 sitemap index 格式，最多导入 5000 条 URL。</p>
+              <div className="flex justify-end gap-3">
+                <GlowButton variant="secondary" onClick={() => setShowSitemapModal(false)}>{t('urls.cancel')}</GlowButton>
+                <GlowButton onClick={handleImportSitemap} disabled={importing}>
+                  {importing ? t('urls.importing') : t('urls.importSitemap')}
+                </GlowButton>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      )}
+      {optimizationModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm" onClick={() => setOptimizationModal(null)}>
+          <GlassCard className="w-full max-w-3xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold theme-text-primary">内容优化审批</h3>
+                <p className="mt-1 text-xs theme-text-secondary">
+                  {optimizationModal.platform} / {optimizationModal.resource_type} / {optimizationModal.status}
+                </p>
+              </div>
+              <button onClick={() => setOptimizationModal(null)} className="theme-text-secondary hover:theme-text-primary"><X size={20} /></button>
+            </div>
+
+            {optimizationModal.error_message && (
+              <div className="mb-4 rounded-xl p-3 text-sm" style={{ backgroundColor: 'rgba(255,68,102,0.1)', border: '1px solid rgba(255,68,102,0.2)', color: 'var(--accent-error)' }}>
+                {optimizationModal.error_message}
+              </div>
+            )}
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg-input)' }}>
+                <p className="mb-2 text-xs font-semibold theme-text-secondary">当前标题</p>
+                <p className="text-sm theme-text-primary">{optimizationModal.current_title || '-'}</p>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: 'rgba(0,240,255,0.08)', border: '1px solid rgba(0,240,255,0.2)' }}>
+                <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--accent-cyan)' }}>建议标题</p>
+                {['draft', 'rejected', 'failed'].includes(optimizationModal.status) ? (
+                  <input
+                    type="text"
+                    value={suggestedTitle}
+                    maxLength={70}
+                    onChange={e => setSuggestedTitle(e.target.value)}
+                    className="h-10 w-full rounded-lg px-3 text-sm outline-none"
+                    style={inputStyle}
+                  />
+                ) : (
+                  <p className="text-sm font-medium theme-text-primary">{optimizationModal.suggested_title}</p>
+                )}
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg-input)' }}>
+                <p className="mb-2 text-xs font-semibold theme-text-secondary">当前描述</p>
+                <p className="text-sm theme-text-primary">{optimizationModal.current_meta_description || '-'}</p>
+              </div>
+              <div className="rounded-xl p-4" style={{ backgroundColor: 'rgba(176,38,255,0.08)', border: '1px solid rgba(176,38,255,0.2)' }}>
+                <p className="mb-2 text-xs font-semibold" style={{ color: 'var(--accent-purple)' }}>建议描述</p>
+                {['draft', 'rejected', 'failed'].includes(optimizationModal.status) ? (
+                  <textarea
+                    value={suggestedDescription}
+                    maxLength={180}
+                    onChange={e => setSuggestedDescription(e.target.value)}
+                    rows={3}
+                    className="w-full resize-none rounded-lg px-3 py-2 text-sm outline-none"
+                    style={inputStyle}
+                  />
+                ) : (
+                  <p className="text-sm font-medium theme-text-primary">{optimizationModal.suggested_meta_description}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl p-4" style={{ backgroundColor: 'var(--bg-input)' }}>
+              <p className="mb-2 text-xs font-semibold theme-text-secondary">关键词与内容缺口</p>
+              <div className="mb-3 flex flex-wrap gap-2">
+                {optimizationModal.primary_keyword && (
+                  <span className="rounded-full px-2 py-1 text-xs" style={{ backgroundColor: 'rgba(0,240,255,0.12)', color: 'var(--accent-cyan)' }}>
+                    主词：{optimizationModal.primary_keyword}
+                  </span>
+                )}
+                {(optimizationModal.missing_keywords || []).map(kw => (
+                  <span key={kw} className="rounded-full px-2 py-1 text-xs" style={{ backgroundColor: 'rgba(255,170,0,0.12)', color: 'var(--accent-warning)' }}>
+                    待覆盖：{kw}
+                  </span>
+                ))}
+              </div>
+              <p className="text-sm theme-text-primary">{optimizationModal.content_gap_summary || '-'}</p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              {['draft', 'approved'].includes(optimizationModal.status) && (
+                <GlowButton variant="secondary" onClick={() => handleRejectOptimization(optimizationModal)}>
+                  {optimizationModal.status === 'approved' ? '撤回批准' : '驳回'}
+                </GlowButton>
+              )}
+              {['draft', 'rejected', 'failed'].includes(optimizationModal.status) && (
+                <GlowButton onClick={() => handleSaveAndApprove(optimizationModal)}>
+                  保存并批准
+                </GlowButton>
+              )}
+              {optimizationModal.status === 'approved' && (
+                <GlowButton onClick={() => handleApplyOptimization(optimizationModal)}>
+                  确认回写 CMS
+                </GlowButton>
+              )}
+            </div>
+            <p className="mt-3 text-[10px] theme-text-secondary">
+              Shopify 回写 SEO 标题/描述字段；WordPress 回写标题和 excerpt。正文建议只作为人工参考，不会自动替换整篇内容。
+            </p>
+          </GlassCard>
+        </div>
+      )}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-4 rounded-full px-6 py-3 shadow-2xl shadow-indigo-500/20"
+          style={{ backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)', backdropFilter: 'blur(16px)' }}>
+          <span className="text-sm font-medium theme-text-primary">
+            {t('urls.selected')?.replace('{count}', String(selectedIds.length)) || `已选中 ${selectedIds.length} 项`}
+          </span>
+          <div className="h-4 w-px bg-gray-600/50"></div>
+          <button onClick={() => handleBatchAction('recrawl')} disabled={batchActioning} className="flex items-center gap-1 text-xs hover:text-indigo-400 theme-text-secondary transition-colors">
+            <RotateCcw size={14} /> {t('urls.batchRecrawl')}
+          </button>
+          <button onClick={() => handleBatchAction('archive')} disabled={batchActioning} className="flex items-center gap-1 text-xs hover:text-amber-400 theme-text-secondary transition-colors">
+            <Archive size={14} /> {t('urls.batchArchive')}
+          </button>
+          <button onClick={() => handleBatchAction('delete')} disabled={batchActioning} className="flex items-center gap-1 text-xs hover:text-red-400 theme-text-secondary transition-colors">
+            <X size={14} /> {t('urls.batchDelete')}
+          </button>
         </div>
       )}
     </div>

@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, Date, Float, Integer, String, DateTime, ForeignKey
+from sqlalchemy import Boolean, Date, Float, Integer, String, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -21,6 +21,9 @@ class Tag(Base):
 
 class PerformanceSnapshot(Base):
     __tablename__ = "performancesnapshot"
+    __table_args__ = (
+        UniqueConstraint("url_id", "snapshot_date", name="uq_snapshot_url_date"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     url_id: Mapped[int] = mapped_column(Integer, ForeignKey("urlrecord.id"))
