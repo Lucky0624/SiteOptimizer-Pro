@@ -125,6 +125,20 @@ export interface SitemapImportResponse {
   sitemap_url: string
 }
 
+export type URLBatchAction = 'archive' | 'recrawl' | 'delete'
+
+export interface URLBatchActionResponse {
+  status: string
+  action: string
+  affected: number
+}
+
+export interface URLExportParams {
+  website_id?: number
+  tag?: string
+  status?: string
+}
+
 export interface QuotaStatusItem {
   api_type: string
   used: number
@@ -417,6 +431,31 @@ export const api = {
       request<URLItem>(`/urls/${id}/recrawl`, { method: 'POST' }),
     importSitemap: (data: SitemapImportPayload) =>
       request<SitemapImportResponse>('/urls/import-sitemap', { method: 'POST', body: JSON.stringify(data) }),
+    batchAction: (action: URLBatchAction, ids: number[]) =>
+      request<URLBatchActionResponse>('/urls/batch', {
+        method: 'POST',
+        body: JSON.stringify({ action, ids }),
+      }),
+    exportCsv: (params: URLExportParams = {}) => {
+      const query = new URLSearchParams()
+      if (params.website_id) query.set('website_id', String(params.website_id))
+      if (params.tag) query.set('tag', params.tag)
+      if (params.status) query.set('status', params.status)
+      const qs = query.toString()
+      return fetch(`${BASE_URL}/urls/export${qs ? `?${qs}` : ''}`, {
+        headers: { 'X-Admin-Key': getAdminKey() },
+      }).then(res => {
+        if (!res.ok) throw new Error(`Export failed: ${res.status}`)
+        return res.blob()
+      }).then(blob => {
+        const url = URL.createObjectURL(blob)
+        const link = document.createElement('a')
+        link.href = url
+        link.download = `urls_export_${Date.now()}.csv`
+        link.click()
+        URL.revokeObjectURL(url)
+      })
+    },
   },
 
   quota: {
@@ -633,36 +672,4 @@ export const api = {
       return request<KeywordTrendPoint[]>(`/keywords/trends?${q.toString()}`)
     },
   },
-}
-
-// 扩展 URL api 方法（批量操作 & CSV 导出）
-declare module './api' {}
-
-// 覆写 urls 增加批量方法（通过直接在 api 对象上注入）
-;(api.urls as any).batchAction = (action: string, ids: number[]) =>
-  request<{ status: string; action: string; affected: number }>(
-    '/urls/batch', { method: 'POST', body: JSON.stringify({ action, ids }) }
-  )
-
-;(api.urls as any).exportCsv = (params: { website_id?: number; tag?: string; status?: string } = {}) => {
-  const q = new URLSearchParams()
-  if (params.website_id) q.set('website_id', String(params.website_id))
-  if (params.tag) q.set('tag', params.tag)
-  if (params.status) q.set('status', params.status)
-  // CSV 导出使用直接链接下载
-  const BASE = import.meta.env.VITE_API_BASE_URL || '/api'
-  // 通过 fetch 下载（保留 Header）
-  return fetch(`${BASE}/urls/export?${q.toString()}`, {
-    headers: { 'X-Admin-Key': localStorage.getItem('admin_key') || '' },
-  }).then(res => {
-    if (!res.ok) throw new Error(`Export failed: ${res.status}`)
-    return res.blob()
-  }).then(blob => {
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `urls_export_${Date.now()}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
-  })
 }

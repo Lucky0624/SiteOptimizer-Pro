@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, Fragment } from 'react'
 import { Search, Plus, RotateCcw, Archive, ChevronDown, ChevronUp, X, FileDown } from 'lucide-react'
 import { useApi } from '../hooks/useApi'
 import { api } from '../services/api'
-import type { ContentOptimizationItem, URLItem, URLDetailItem, WebsiteResponse } from '../services/api'
+import type { ContentOptimizationItem, URLBatchAction, URLItem, URLDetailItem, WebsiteResponse } from '../services/api'
 import { useI18n } from '../i18n/I18nContext'
 import { useWebsite } from '../context/WebsiteContext'
 import { useToast } from '../context/ToastContext'
@@ -175,13 +175,12 @@ export default function URLManagement() {
     )
   }
 
-  const handleBatchAction = async (action: string) => {
+  const handleBatchAction = async (action: URLBatchAction) => {
     if (!selectedIds.length) return
     if (action === 'delete' && !window.confirm(t('urls.deleteConfirm') || '确认删除所选 URL 吗？')) return
 
     setBatchActioning(true)
     try {
-      // @ts-ignore (因为我们在 api.ts 里强行注了 batchAction)
       const res = await api.urls.batchAction(action, selectedIds)
       showToast(t('urls.batchSuccess')?.replace('{count}', String(res.affected)) || `成功操作 ${res.affected} 个网址`, 'success')
       setSelectedIds([])
@@ -196,8 +195,7 @@ export default function URLManagement() {
   const handleExportCsv = async () => {
     try {
       showToast(t('urls.exporting') || '正在导出...', 'info')
-      // @ts-ignore
-      await api.urls.exportCsv({ website_id: selectedWebsiteId, tag: tagFilter, status: '' })
+      await api.urls.exportCsv({ website_id: selectedWebsiteId ?? undefined, tag: tagFilter })
     } catch (err: any) {
       showToast(err.message || t('urls.exportError') || '导出失败', 'error')
     }

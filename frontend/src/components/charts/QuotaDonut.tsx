@@ -1,4 +1,4 @@
-import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts'
+import { PieChart, Pie, Cell } from 'recharts'
 
 interface QuotaDonutProps {
   used: number
@@ -17,24 +17,22 @@ export default function QuotaDonut({ used, limit, label, color = '#00f0ff' }: Qu
 
   return (
     <div className="relative flex flex-col items-center">
-      <ResponsiveContainer width={160} height={160}>
-        <PieChart>
-          <Pie
-            data={data}
-            cx="50%"
-            cy="50%"
-            innerRadius={50}
-            outerRadius={70}
-            startAngle={90}
-            endAngle={-270}
-            dataKey="value"
-            strokeWidth={0}
-          >
-            <Cell fill={color} stroke="none" />
-            <Cell fill="rgba(255,255,255,0.05)" stroke="none" />
-          </Pie>
-        </PieChart>
-      </ResponsiveContainer>
+      <PieChart width={160} height={160}>
+        <Pie
+          data={data}
+          cx="50%"
+          cy="50%"
+          innerRadius={50}
+          outerRadius={70}
+          startAngle={90}
+          endAngle={-270}
+          dataKey="value"
+          strokeWidth={0}
+        >
+          <Cell fill={color} stroke="none" />
+          <Cell fill="rgba(255,255,255,0.05)" stroke="none" />
+        </Pie>
+      </PieChart>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className="text-2xl font-bold text-[#e0e0ff]">{percentage}%</span>
         <span className="text-[10px] text-[#8888aa]">{used}/{limit}</span>
