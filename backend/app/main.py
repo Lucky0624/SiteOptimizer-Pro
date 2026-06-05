@@ -1,8 +1,11 @@
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.database import create_tables, async_session
@@ -28,6 +31,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 scheduler = AsyncIOScheduler()
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 async def run_daily_seo_cycle() -> None:
@@ -91,3 +95,30 @@ app.include_router(keywords_router)
 @app.get("/health")
 async def health_check():
     return {"status": "ok", "service": "SiteOptimizer Pro"}
+
+
+if FRONTEND_DIST.exists():
+    app.mount(
+        "/assets",
+        StaticFiles(directory=FRONTEND_DIST / "assets"),
+        name="frontend-assets",
+    )
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def serve_frontend(full_path: str):
+    if full_path == "api" or full_path.startswith("api/"):
+        raise HTTPException(status_code=404, detail="API endpoint not found")
+    if not FRONTEND_DIST.exists():
+        raise HTTPException(status_code=404, detail="Frontend build not found")
+
+    requested_path = (FRONTEND_DIST / full_path).resolve()
+    try:
+        requested_path.relative_to(FRONTEND_DIST)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="File not found") from exc
+
+    if requested_path.is_file():
+        return FileResponse(requested_path)
+
+    return FileResponse(FRONTEND_DIST / "index.html")
