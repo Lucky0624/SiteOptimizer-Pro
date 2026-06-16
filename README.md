@@ -41,7 +41,7 @@ cd backend
 python -m venv venv
 source venv/bin/activate  # Windows 使用: venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env  # 填入您的 Google API 凭据和 Admin Key
+cp .env.example .env  # 设置 Admin Key；Google 凭据在界面中导入
 python main.py
 ```
 
@@ -57,9 +57,11 @@ npm run dev
 ## ⚙️ 核心配置说明
 
 在 `backend/.env` 中，您需要配置以下关键参数：
-- `GOOGLE_SERVICE_ACCOUNT_FILE`: Google 服务账号 JSON 路径。
 - `ADMIN_KEY`: 访问后台的管理员密钥（需与前端登录一致）。
 - `DATABASE_URL`: 数据库连接字符串。
+- `CREDENTIAL_ENCRYPTION_KEY`: 非 Windows 系统必填，用于在本机加密保存导入的 Google 私钥。
+
+启动前后端后，在“系统设置”中导入 Google Cloud 下载的服务账号 JSON 密钥文件。应用只显示服务账号邮箱和项目 ID；私钥在写入本地数据库前加密保存。随后在“站点管理”配置 GSC 属性地址（例如 `sc-domain:example.com` 或 `https://www.example.com/`），并执行站点级连接测试。
 
 ---
 

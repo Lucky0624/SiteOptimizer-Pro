@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import asyncio
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,12 +8,15 @@ from app.config import settings
 from app.models.quota import QuotaUsage
 from app.models.task import TaskQueue
 
-
 TASK_TYPE_TO_API: dict[str, str] = {
     "gsc_fetch": "gsc",
     "inspection": "inspection",
     "indexing": "indexing",
+    "keyword_fetch": "gsc",
 }
+
+# 修复P1：模块级锁，防止并发调用时配额超颟消耗
+_quota_lock = asyncio.Lock()
 
 
 async def _get_quota_limits(db: AsyncSession) -> dict[str, int]:
@@ -73,16 +77,17 @@ class QuotaManager:
     async def consume_quota(
         self, db: AsyncSession, api_type: str, count: int = 1
     ) -> bool:
-        limits = await _get_quota_limits(db)
-        today = date.today()
-        limit = limits.get(api_type, 0)
-        usage = await self._get_or_create_usage(db, api_type, today, limit)
-        remaining = usage.limit_count - usage.used_count
-        if remaining < count:
-            return False
-        usage.used_count += count
-        await db.flush()
-        return True
+        async with _quota_lock:  # 修复P1：用锁保证原子性
+            limits = await _get_quota_limits(db)
+            today = date.today()
+            limit = limits.get(api_type, 0)
+            usage = await self._get_or_create_usage(db, api_type, today, limit)
+            remaining = usage.limit_count - usage.used_count
+            if remaining < count:
+                return False
+            usage.used_count += count
+            await db.flush()
+            return True
 
     async def get_daily_status(self, db: AsyncSession) -> dict:
         limits = await _get_quota_limits(db)

@@ -1,7 +1,11 @@
+import logging
 import httpx
 from typing import Dict, Any
 
 from app.config import settings
+from app.services.secret_storage import reveal_secret
+
+logger = logging.getLogger(__name__)
 
 class PSIService:
     def __init__(self) -> None:
@@ -22,7 +26,7 @@ class PSIService:
             result = await db.execute(stmt)
             db_setting = result.scalar_one_or_none()
             if db_setting:
-                api_key = db_setting.value
+                api_key = reveal_secret(db_setting.value)
 
         params = {
             "url": url,
@@ -63,10 +67,9 @@ class PSIService:
                     "full_data": data if settings.DEBUG else None
                 }
             except Exception as e:
-                # In a real app, we would log this properly
-                print(f"PSI Error for {url}: {str(e)}")
+                logger.error("PSI request failed for %s (%s)", url, type(e).__name__)
                 return {
-                    "error": str(e),
+                    "error": "PageSpeed Insights request failed",
                     "performance_score": 0,
                     "lcp": 0,
                     "cls": 0,

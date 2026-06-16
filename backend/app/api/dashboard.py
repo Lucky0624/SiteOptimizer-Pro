@@ -79,6 +79,7 @@ async def get_performance_trends(
 ):
     start_date = date.today() - timedelta(days=days)
 
+    # 修复P1：历史趋势始终 JOIN URLRecord，避免无 website_id 时跨站数据污染
     stmt = (
         select(
             PerformanceSnapshot.snapshot_date,
@@ -88,13 +89,14 @@ async def get_performance_trends(
             func.avg(PerformanceSnapshot.position).label("position"),
             func.sum(PerformanceSnapshot.conversions).label("conversions"),
         )
+        .join(URLRecord, URLRecord.id == PerformanceSnapshot.url_id)
         .where(PerformanceSnapshot.snapshot_date >= start_date)
         .group_by(PerformanceSnapshot.snapshot_date)
         .order_by(PerformanceSnapshot.snapshot_date)
     )
 
     if website_id:
-        stmt = stmt.join(URLRecord, URLRecord.id == PerformanceSnapshot.url_id).where(URLRecord.website_id == website_id)
+        stmt = stmt.where(URLRecord.website_id == website_id)
 
     result = await db.execute(stmt)
     rows = result.all()
@@ -227,9 +229,10 @@ async def get_decaying_urls(
 
 @router.post("/run-cycle")
 async def run_manual_cycle(
+    website_id: int | None = Query(None),
     api_key: str = Depends(verify_admin_key),
     db: AsyncSession = Depends(get_db),
 ):
     from app.services.seo_loop import seo_loop
-    result = await seo_loop.run_full_cycle(db)
+    result = await seo_loop.run_full_cycle(db, website_id=website_id)
     return {"status": "success", "result": result}

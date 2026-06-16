@@ -8,10 +8,10 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
-import type { TrendPoint } from '../../services/api'
+import type { TrendDataPoint } from '../../services/api'
 
 interface TrafficChartProps {
-  data: TrendPoint[]
+  data: TrendDataPoint[]
 }
 
 interface CustomTooltipProps {

@@ -1,5 +1,8 @@
 import asyncio
+import logging
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 try:
     from google.analytics.data_v1beta import BetaAnalyticsDataClient
@@ -12,24 +15,42 @@ try:
 except ImportError:
     BetaAnalyticsDataClient = None
 
-from app.config import settings
 from app.services.google_api import google_api_client
 
 
 class GA4Service:
     def __init__(self) -> None:
-        self.client = None
+        self.clients = {}
 
-    async def _get_client(self):
+    def invalidate_client(self, website_id: int | None = None) -> None:
+        """修复P0：凭据更新后清空客户端缓存，强制重新初始化"""
+        if website_id is None:
+            self.clients.clear()
+        else:
+            self.clients.pop(website_id, None)
+
+    async def _get_client(self, website_id: int | None = None):
         if BetaAnalyticsDataClient is None:
+            logger.warning("google-analytics-data package not installed, GA4 disabled.")
             return None
-        if self.client is None:
-            creds = await google_api_client._get_credentials()
-            self.client = BetaAnalyticsDataClient(credentials=creds)
-        return self.client
+        cache_key = website_id or 0
+        if cache_key not in self.clients:
+            try:
+                creds = await google_api_client._get_website_credentials(website_id)
+                self.clients[cache_key] = BetaAnalyticsDataClient(credentials=creds)
+            except Exception as e:
+                logger.error("Failed to initialize GA4 client: %s", e)
+                return None
+        return self.clients[cache_key]
 
-    async def get_report(self, property_id: str, start_date: str, end_date: str) -> list[dict[str, Any]]:
-        client = await self._get_client()
+    async def get_report(
+        self,
+        property_id: str,
+        start_date: str,
+        end_date: str,
+        website_id: int | None = None,
+    ) -> list[dict[str, Any]]:
+        client = await self._get_client(website_id)
         if client is None:
             return []
 
@@ -61,7 +82,7 @@ class GA4Service:
                 })
             return results
         except Exception as e:
-            print(f"GA4 API Error: {e}")
+            logger.exception("GA4 API Error for property %s: %s", property_id, e)
             return []
 
 

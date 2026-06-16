@@ -45,7 +45,11 @@ class TagEngine:
 
         if url_record.last_modified_at:
             two_days_ago = datetime.now(timezone.utc) - timedelta(days=2)
-            if url_record.last_modified_at >= two_days_ago:
+            # 修复P0：处理 naive datetime，添加 UTC 时区后再比较
+            last_mod = url_record.last_modified_at
+            if last_mod.tzinfo is None:
+                last_mod = last_mod.replace(tzinfo=timezone.utc)
+            if last_mod >= two_days_ago:
                 await self.apply_tag(db, url_record.id, "status", "Need_Recrawl")
                 applied_tags.append("Need_Recrawl")
             else:
@@ -74,7 +78,10 @@ class TagEngine:
 
         if "Need_Recrawl" in tag_names and url_record.last_modified_at:
             two_days_ago = datetime.now(timezone.utc) - timedelta(days=2)
-            if url_record.last_modified_at < two_days_ago:
+            last_mod = url_record.last_modified_at
+            if last_mod.tzinfo is None:
+                last_mod = last_mod.replace(tzinfo=timezone.utc)
+            if last_mod < two_days_ago:
                 await self.remove_tag(db, url_record.id, "Need_Recrawl")
                 removed += 1
 
