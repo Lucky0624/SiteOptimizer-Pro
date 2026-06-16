@@ -9,6 +9,7 @@ interface HeaderProps {
 }
 
 const pageTitleKeys: Record<string, string> = {
+  '/guide': 'sidebar.guide',
   '/dashboard': 'dashboard.title',
   '/urls': 'urls.title',
   '/keywords': 'sidebar.keywords',

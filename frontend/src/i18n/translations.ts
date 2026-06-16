@@ -2,6 +2,7 @@ export type Locale = 'zh' | 'en'
 
 export const translations: Record<Locale, Record<string, string>> = {
   zh: {
+    'sidebar.guide': '接入向导',
     'sidebar.dashboard': '仪表盘',
     'sidebar.urls': '网址管理',
     'sidebar.keywords': '关键词分析',
@@ -263,6 +264,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     'urls.addError': '添加失败',
   },
   en: {
+    'sidebar.guide': 'Setup Guide',
     'sidebar.dashboard': 'Dashboard',
     'sidebar.urls': 'URLs',
     'sidebar.keywords': 'Keywords',

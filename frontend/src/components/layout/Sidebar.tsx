@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Link, ListTodo, Gauge, Settings, X, Globe, Search, Zap, Wifi, WifiOff } from 'lucide-react'
+import { BookOpen, LayoutDashboard, Link, ListTodo, Gauge, Settings, X, Globe, Search, Zap, Wifi, WifiOff } from 'lucide-react'
 import clsx from 'clsx'
 import { useI18n } from '../../i18n/I18nContext'
 
@@ -10,6 +10,7 @@ interface SidebarProps {
 }
 
 const navKeys = [
+  { to: '/guide', icon: BookOpen, labelKey: 'sidebar.guide' },
   { to: '/dashboard', icon: LayoutDashboard, labelKey: 'sidebar.dashboard' },
   { to: '/urls', icon: Link, labelKey: 'sidebar.urls' },
   { to: '/keywords', icon: Search, labelKey: 'sidebar.keywords' },

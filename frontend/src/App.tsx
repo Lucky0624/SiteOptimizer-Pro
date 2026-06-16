@@ -5,6 +5,7 @@ import { ToastProvider } from './context/ToastContext'
 import AppLayout from './components/layout/AppLayout'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
+const SetupGuide = lazy(() => import('./pages/SetupGuide'))
 const URLManagement = lazy(() => import('./pages/URLManagement'))
 const WebsiteManagement = lazy(() => import('./pages/WebsiteManagement'))
 const TaskQueue = lazy(() => import('./pages/TaskQueue'))
@@ -32,6 +33,7 @@ function App() {
         <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <Routes>
             <Route element={<AppLayout />}>
+              <Route path="/guide" element={withPageFallback(<SetupGuide />)} />
               <Route path="/dashboard" element={withPageFallback(<Dashboard />)} />
               <Route path="/urls" element={withPageFallback(<URLManagement />)} />
               <Route path="/keywords" element={withPageFallback(<KeywordAnalysis />)} />
@@ -40,7 +42,7 @@ function App() {
               <Route path="/tasks" element={withPageFallback(<TaskQueue />)} />
               <Route path="/quota" element={withPageFallback(<QuotaMonitor />)} />
               <Route path="/settings" element={withPageFallback(<Settings />)} />
-              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/" element={<Navigate to="/guide" replace />} />
             </Route>
           </Routes>
         </BrowserRouter>
